@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17191a">
+  <meta name="description" content="A touch-friendly, offline-ready fx-82MS style scientific calculator for Android and the web.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>fx-82MS Scientific Calculator</title>
+</head>
+<body>
+  <main class="app-shell">
+    <section class="calculator" aria-label="fx-82MS style scientific calculator">
+      <header class="branding">
+        <div class="brand-line"><span class="brand-name">CASIO</span><span class="model-name">fx-82MS</span></div>
+        <div class="edition-line"><span class="s-vpam">S-V.P.A.M.</span><span class="edition">2nd edition</span></div>
+      </header>
+
+      <section class="display-frame" aria-label="Calculator display">
+        <div class="lcd">
+          <div class="lcd-status">
+            <span id="statusMode">COMP</span>
+            <span id="statusAngle">D</span>
+            <span id="statusFlags"></span>
+            <span id="statusMemory" class="memory-indicator"></span>
+          </div>
+          <div class="lcd-expression" id="expressionText" aria-live="polite"></div>
+          <div class="lcd-result" id="resultText" aria-live="polite">0</div>
+        </div>
+      </section>
+
+      <section class="top-controls" aria-label="Mode, modifiers and navigation">
+        <div class="modifier-keys">
+          <button class="round-key shift-key" data-key="shift" aria-label="Shift">SHIFT</button>
+          <button class="round-key alpha-key" data-key="alpha" aria-label="Alpha">ALPHA</button>
+        </div>
+        <div class="dpad" aria-label="Replay and cursor navigation">
+          <span class="dpad-ring" aria-hidden="true"></span>
+          <button class="nav-key nav-up" data-key="up" aria-label="Previous calculation">▲</button>
+          <button class="nav-key nav-left" data-key="left" aria-label="Move cursor left">◀</button>
+          <button class="nav-key nav-right" data-key="right" aria-label="Move cursor right">▶</button>
+          <button class="nav-key nav-down" data-key="down" aria-label="Next calculation">▼</button>
+          <span class="dpad-center" aria-hidden="true"></span>
+        </div>
+        <div class="system-keys">
+          <button class="round-key system-key" data-key="mode" aria-label="Mode; Shift for clear">MODE<span class="above-label">CLR</span></button>
+          <button class="round-key system-key on-key" data-key="on" aria-label="On">ON</button>
+        </div>
+      </section>
+
+      <section class="function-grid" aria-label="Scientific functions">
+        <button class="key function-key" data-key="inverse" aria-label="Reciprocal; Shift factorial"><span class="shift-label">x!</span><span class="key-main">x<sup>−1</sup></span></button>
+        <button class="key function-key" data-key="ncr" aria-label="Combination; Shift permutation"><span class="shift-label">nPr</span><span class="key-main">nCr</span></button>
+        <button class="key function-key" data-key="polar" aria-label="Polar; Shift rectangular"><span class="shift-label">Rec(</span><span class="key-main">Pol(</span></button>
+        <button class="key function-key" data-key="cube" aria-label="Cube; Shift cube root"><span class="shift-label">∛</span><span class="key-main">x<sup>3</sup></span></button>
+        <span class="grid-spacer" aria-hidden="true"></span><span class="grid-spacer" aria-hidden="true"></span>
+
+        <button class="key function-key" data-key="fraction" aria-label="Fraction; Shift fraction display"><span class="shift-label">d/c</span><span class="key-main">a b/c</span></button>
+        <button class="key function-key" data-key="sqrt" aria-label="Square root"><span class="key-main">√</span></button>
+        <button class="key function-key" data-key="square" aria-label="Square"><span class="key-main">x<sup>2</sup></span></button>
+        <button class="key function-key" data-key="power" aria-label="Power; Shift x-th root"><span class="shift-label">x√</span><span class="key-main">^</span></button>
+        <button class="key function-key" data-key="log" aria-label="Common logarithm; Shift ten to the power x"><span class="shift-label">10<sup>x</sup></span><span class="key-main">log</span></button>
+        <button class="key function-key" data-key="ln" aria-label="Natural logarithm; Shift e to the power x"><span class="shift-label">e<sup>x</sup></span><span class="key-main">ln</span></button>
+
+        <button class="key function-key" data-key="negative" aria-label="Change sign; Alpha A"><span class="alpha-label">A</span><span class="key-main">(−)</span></button>
+        <button class="key function-key" data-key="dms" aria-label="Degrees minutes seconds; Alpha B"><span class="alpha-label">B</span><span class="key-main">° ′ ″</span></button>
+        <button class="key function-key" data-key="hyp" aria-label="Hyperbolic; Alpha C"><span class="alpha-label">C</span><span class="key-main">hyp</span></button>
+        <button class="key function-key" data-key="sin" aria-label="Sine; Shift inverse sine; Alpha D"><span class="shift-label">sin<sup>−1</sup></span><span class="alpha-label">D</span><span class="key-main">sin</span></button>
+        <button class="key function-key" data-key="cos" aria-label="Cosine; Shift inverse cosine; Alpha E"><span class="shift-label">cos<sup>−1</sup></span><span class="alpha-label">E</span><span class="key-main">cos</span></button>
+        <button class="key function-key" data-key="tan" aria-label="Tangent; Shift inverse tangent; Alpha F"><span class="shift-label">tan<sup>−1</sup></span><span class="alpha-label">F</span><span class="key-main">tan</span></button>
+
+        <button class="key function-key" data-key="rcl" aria-label="Recall; Shift store"><span class="shift-label">STO</span><span class="key-main">RCL</span></button>
+        <button class="key function-key" data-key="eng" aria-label="Engineering notation; Shift cursor left"><span class="shift-label">←</span><span class="key-main">ENG</span></button>
+        <button class="key function-key" data-key="open" aria-label="Open parenthesis; Alpha X"><span class="alpha-label">X</span><span class="key-main">(</span></button>
+        <button class="key function-key" data-key="close" aria-label="Close parenthesis; Alpha Y"><span class="alpha-label">Y</span><span class="key-main">)</span></button>
+        <button class="key function-key" data-key="comma" aria-label="Comma"><span class="key-main">,</span></button>
+        <button class="key function-key" data-key="mplus" aria-label="Memory plus; Shift memory minus; Alpha M"><span class="shift-label">M−</span><span class="alpha-label">M</span><span class="key-main">M+</span></button>
+      </section>
+
+      <section class="number-grid" aria-label="Numbers and arithmetic">
+        <button class="key number-key" data-key="7"><span class="key-main">7</span></button>
+        <button class="key number-key" data-key="8"><span class="key-main">8</span></button>
+        <button class="key number-key" data-key="9"><span class="key-main">9</span></button>
+        <button class="key function-key edit-key" data-key="del" aria-label="Delete; Shift insert"><span class="shift-label">INS</span><span class="key-main">DEL</span></button>
+        <button class="key function-key clear-key" data-key="ac" aria-label="All clear; Shift off"><span class="shift-label">OFF</span><span class="key-main">AC</span></button>
+
+        <button class="key number-key" data-key="4"><span class="key-main">4</span></button>
+        <button class="key number-key" data-key="5"><span class="key-main">5</span></button>
+        <button class="key number-key" data-key="6"><span class="key-main">6</span></button>
+        <button class="key operator-key" data-key="multiply"><span class="key-main">×</span></button>
+        <button class="key operator-key" data-key="divide"><span class="key-main">÷</span></button>
+
+        <button class="key number-key" data-key="1"><span class="shift-label">S-SUM</span><span class="key-main">1</span></button>
+        <button class="key number-key" data-key="2"><span class="shift-label">S-VAR</span><span class="key-main">2</span></button>
+        <button class="key number-key" data-key="3"><span class="shift-label">π</span><span class="key-main">3</span></button>
+        <button class="key operator-key" data-key="plus"><span class="key-main">+</span></button>
+        <button class="key operator-key" data-key="minus"><span class="key-main">−</span></button>
+
+        <button class="key number-key" data-key="0"><span class="shift-label">Rnd</span><span class="key-main">0</span></button>
+        <button class="key number-key" data-key="decimal"><span class="key-main">.</span></button>
+        <button class="key number-key exp-key" data-key="exp"><span class="shift-label">Ran#</span><span class="key-main">×10<sup>x</sup></span></button>
+        <button class="key number-key ans-key" data-key="ans"><span class="shift-label">DRG▶</span><span class="key-main">Ans</span></button>
+        <button class="key operator-key equals-key" data-key="equals" aria-label="Equals; Shift percent"><span class="shift-label">%</span><span class="key-main">=</span></button>
+      </section>
+
+      <footer class="calculator-footer">
+        <span>fx-82MS style · runs offline</span>
+        <button id="installButton" class="install-button" type="button" hidden>Install app</button>
+      </footer>
+    </section>
+    <p class="page-note">Touch keys or use your keyboard. On Android, use <b>Install app</b> or Chrome’s <b>Add to Home screen</b>.</p>
+  </main>
+  <div id="liveMessage" class="sr-only" aria-live="polite"></div>
+  <script src="app.js" defer></script>
+</body>
+</html>
