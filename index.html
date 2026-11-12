@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#17191a">
   <meta name="description" content="A touch-friendly, offline-ready fx-82MS style scientific calculator for Android and the web.">
   <meta name="mobile-web-app-capable" content="yes">
@@ -17,7 +17,7 @@
   <main class="app-shell">
     <section class="calculator" aria-label="fx-82MS style scientific calculator">
       <header class="branding">
-        <div class="brand-line"><span class="brand-name">CASIO</span><span class="model-name">fx-82MS</span></div>
+        <div class="brand-line"><span class="brand-name">CASIO</span><span class="model-name">fx-82MS</span><button id="installButton" class="install-button" type="button" hidden>Install</button></div>
         <div class="edition-line"><span class="s-vpam">S-V.P.A.M.</span><span class="edition">2nd edition</span></div>
       </header>
 
@@ -25,8 +25,10 @@
         <div class="lcd">
           <div class="lcd-status">
             <span id="statusMode">COMP</span>
-            <span id="statusAngle">D</span>
+            <span id="statusAngle">DEG</span>
             <span id="statusFlags"></span>
+            <span id="statusHistory" aria-hidden="true"></span>
+            <span id="statusSteps" aria-hidden="true"></span>
             <span id="statusMemory" class="memory-indicator"></span>
           </div>
           <div class="lcd-expression" id="expressionText" aria-live="polite"></div>
@@ -56,7 +58,7 @@
       <section class="function-grid" aria-label="Scientific functions">
         <button class="key function-key" data-key="inverse" aria-label="Reciprocal; Shift factorial"><span class="shift-label">x!</span><span class="key-main">x<sup>−1</sup></span></button>
         <button class="key function-key" data-key="ncr" aria-label="Combination; Shift permutation"><span class="shift-label">nPr</span><span class="key-main">nCr</span></button>
-        <button class="key function-key" data-key="polar" aria-label="Polar; Shift rectangular"><span class="shift-label">Rec(</span><span class="key-main">Pol(</span></button>
+        <button class="key function-key" data-key="polar" aria-label="Polar; Shift rectangular; Alpha statement separator"><span class="shift-label">Rec(</span><span class="alpha-label">:</span><span class="key-main">Pol(</span></button>
         <button class="key function-key" data-key="cube" aria-label="Cube; Shift cube root"><span class="shift-label">∛</span><span class="key-main">x<sup>3</sup></span></button>
         <span class="grid-spacer" aria-hidden="true"></span><span class="grid-spacer" aria-hidden="true"></span>
 
@@ -68,7 +70,7 @@
         <button class="key function-key" data-key="ln" aria-label="Natural logarithm; Shift e to the power x"><span class="shift-label">e<sup>x</sup></span><span class="key-main">ln</span></button>
 
         <button class="key function-key" data-key="negative" aria-label="Change sign; Alpha A"><span class="alpha-label">A</span><span class="key-main">(−)</span></button>
-        <button class="key function-key" data-key="dms" aria-label="Degrees minutes seconds; Alpha B"><span class="alpha-label">B</span><span class="key-main">° ′ ″</span></button>
+        <button class="key function-key" data-key="dms" aria-label="Degrees minutes seconds; Shift convert sexagesimal; Alpha B"><span class="shift-label">←</span><span class="alpha-label">B</span><span class="key-main">° ′ ″</span></button>
         <button class="key function-key" data-key="hyp" aria-label="Hyperbolic; Alpha C"><span class="alpha-label">C</span><span class="key-main">hyp</span></button>
         <button class="key function-key" data-key="sin" aria-label="Sine; Shift inverse sine; Alpha D"><span class="shift-label">sin<sup>−1</sup></span><span class="alpha-label">D</span><span class="key-main">sin</span></button>
         <button class="key function-key" data-key="cos" aria-label="Cosine; Shift inverse cosine; Alpha E"><span class="shift-label">cos<sup>−1</sup></span><span class="alpha-label">E</span><span class="key-main">cos</span></button>
@@ -78,7 +80,7 @@
         <button class="key function-key" data-key="eng" aria-label="Engineering notation; Shift cursor left"><span class="shift-label">←</span><span class="key-main">ENG</span></button>
         <button class="key function-key" data-key="open" aria-label="Open parenthesis; Alpha X"><span class="alpha-label">X</span><span class="key-main">(</span></button>
         <button class="key function-key" data-key="close" aria-label="Close parenthesis; Alpha Y"><span class="alpha-label">Y</span><span class="key-main">)</span></button>
-        <button class="key function-key" data-key="comma" aria-label="Comma"><span class="key-main">,</span></button>
+        <button class="key function-key" data-key="comma" aria-label="Comma; Shift frequency separator"><span class="shift-label">;</span><span class="key-main">,</span></button>
         <button class="key function-key" data-key="mplus" aria-label="Memory plus; Shift memory minus; Alpha M"><span class="shift-label">M−</span><span class="alpha-label">M</span><span class="key-main">M+</span></button>
       </section>
 
@@ -102,15 +104,14 @@
         <button class="key operator-key" data-key="minus"><span class="key-main">−</span></button>
 
         <button class="key number-key" data-key="0"><span class="shift-label">Rnd</span><span class="key-main">0</span></button>
-        <button class="key number-key" data-key="decimal"><span class="key-main">.</span></button>
-        <button class="key number-key exp-key" data-key="exp"><span class="shift-label">Ran#</span><span class="key-main">×10<sup>x</sup></span></button>
+        <button class="key number-key" data-key="decimal" aria-label="Decimal; Shift random number"><span class="shift-label">Ran#</span><span class="key-main">.</span></button>
+        <button class="key number-key exp-key" data-key="exp" aria-label="Enter exponent"><span class="key-main">×10<sup>x</sup></span></button>
         <button class="key number-key ans-key" data-key="ans"><span class="shift-label">DRG▶</span><span class="key-main">Ans</span></button>
         <button class="key operator-key equals-key" data-key="equals" aria-label="Equals; Shift percent"><span class="shift-label">%</span><span class="key-main">=</span></button>
       </section>
 
       <footer class="calculator-footer">
         <span>fx-82MS style · runs offline</span>
-        <button id="installButton" class="install-button" type="button" hidden>Install app</button>
       </footer>
     </section>
     <p class="page-note">Touch keys or use your keyboard. On Android, use <b>Install app</b> or Chrome’s <b>Add to Home screen</b>.</p>

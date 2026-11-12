@@ -12,7 +12,7 @@ The repository is public at [github.com/laiss3r/fx82ms](https://github.com/laiss
 
 The key-by-key main/SHIFT/ALPHA reference is in [`docs/key-reference.md`](docs/key-reference.md). It maps the displayed keys and alternate functions, including the modifier keys, the MODE setup pages, and the SD/REG statistics menus.
 
-The implementation includes COMP, SD and REG modes; six regression types; angle-unit setup and DRG▶ conversion; display precision; fraction and DMS entry/conversion; arithmetic, percentages, powers, roots, trig/hyperbolic/log functions, nCr/nPr, factorial, random, Rnd, engineering notation, Pol/Rec; Ans, A–F/X/Y variables, independent M memory, editing and replay. Every tap has a subtle 8 ms vibration when supported (native Android bridge in the APK, browser vibration API fallback in the PWA).
+The implementation includes COMP, SD and REG modes; six regression types; angle-unit setup and DRG▶ conversion; display precision; fraction and DMS entry/conversion; arithmetic, percentages, powers, roots, trig/hyperbolic/log functions, nCr/nPr, factorial, random, Rnd, engineering notation and Pol/Rec; Ans, A–F/X/Y variables, independent M memory, editing, replay and local persistence. SD/REG data is entered with M+ (DT), while `=` evaluates without recording; statistics, regression and data browsing/editing follow the selected mode. Manual-derived calculation-range, function-domain, input-length, and numeric/command-stack checks are enforced. Every tap has a subtle 8 ms vibration when supported (native Android bridge in the APK, browser vibration API fallback in the PWA).
 
 ## Run the PWA locally
 
@@ -26,11 +26,15 @@ Open `http://localhost:4173` on a computer, or open the hosted HTTPS URL on Andr
 
 ## Tests
 
-Run the calculation and key-behavior regression suite from the project root:
+Run the calculator regression suite from the project root:
 
 ```sh
+node --check app.js
+node --check tests/calculator.test.js
 node tests/calculator.test.js
 ```
+
+The suite covers arithmetic and parser limits, manual calculation/domain bounds, fractions and DMS, persistence, COMP/SD/REG behavior, all regression types, data-full handling, memory, replay, auto-power-off, haptics, and PWA/Android shell configuration.
 
 ## Android build workflow
 

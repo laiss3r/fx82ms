@@ -9,11 +9,11 @@ This reference follows the key markings and operation groups in the [Casio fx-82
 | `SHIFT` | Arm the yellow function printed above a key; one-shot | A second tap cancels it |
 | `ALPHA` | Arm the green variable printed above a key; one-shot | A second tap cancels it |
 | `MODE` | Opens `COMP / SD / REG`; repeated MODE taps advance through angle, `Fix/Sci/Norm`, fraction and `Disp` setup | `CLR`: `Mcl / Mode / All` |
-| `ON` | Wake/clear the calculator | — |
-| Replay `▲` / `▼` | Previous / next expression in calculation history | — |
+| `ON` | Wake the calculator | — |
+| Replay `▲` / `▼` | COMP: previous / next history entry; SD/REG: browse retained data | — |
 | Replay `◀` / `▶` | Move the insertion cursor | — |
 
-Setup screens accept the displayed number. `Fix` asks for 0–9 decimal places; `Sci` accepts 1–10 significant digits (press `=` after a single-digit value, or enter both digits for 10); `Norm` asks for 1 or 2. The `Disp` screen selects decimal dot or comma.
+Setup screens accept the displayed number. `Fix` asks for 0–9 decimal places; `Sci` accepts 1–10 significant digits (press `=` after a single-digit value, or enter both digits for 10); `Norm` asks for 1 or 2. The `Disp` screen selects decimal dot or comma. `SHIFT` + `AC` powers off; the calculator also auto-powers off after about 10 minutes of inactivity.
 
 ## Scientific-function keys
 
@@ -40,7 +40,7 @@ Setup screens accept the displayed number. `Fix` asks for 0–9 decimal places; 
 | `(` | Open parenthesis | — | X |
 | `)` | Close parenthesis | — | Y |
 | `,` | Separate coordinate or regression inputs | — | — |
-| `M+` | Add the displayed/input value to independent memory M | Subtract it from M | M variable |
+| `M+` | COMP: add to independent M; SD/REG: register data (DT) | COMP: subtract from M; SD/REG: delete the current/last data item | M variable |
 
 `Pol(x,y)` and `Rec(r,θ)` use the selected angle unit. Their two displayed outputs are saved in E and F, as on the fx-82MS family.
 
@@ -60,10 +60,11 @@ Setup screens accept the displayed number. `Fix` asks for 0–9 decimal places; 
 ## Statistical modes
 
 - `MODE → 2` selects SD; `MODE → 3` selects REG. REG offers linear, logarithmic, exponential, power, inverse and quadratic regression. Pwr/Inv/Quad can be selected with `SHIFT` + `1/2/3` (the LCD also lists them as 4/5/6).
-- In SD/REG, `=` registers the current value as data; pressing it again with a blank entry repeats the last datum. In REG, enter an `x,y` pair with the comma key.
+- In SD/REG, enter a value and press `M+` to register it (DT); in REG, separate `x` and `y` with the comma key. A semicolon and frequency can be appended, such as `12;4`. Pressing `M+` with a blank entry repeats the last datum. `=` evaluates an entered expression without recording it; when editing a browsed item, `=` commits the replacement.
+- `SHIFT` + `M+` deletes the browsed item (or the last item when none is browsed). `▲` / `▼` browse data while individual records are available. Use AC to leave data browsing before calculations or statistics menus.
 - `SHIFT` + `1` (S-SUM) recalls sums and count. SD offers Σx², Σx and n; REG also offers Σy², Σy and Σxy. Quadratic REG exposes the additional Σx³, Σx²y and Σx⁴ items on its More screen.
 - `SHIFT` + `2` (S-VAR) recalls means and population/sample standard deviations. REG also exposes regression coefficients, correlation/prediction values, and quadratic C, ŷ, x̂₁ and x̂₂ on its More screen.
-- M+/M− continue to operate on independent memory in SD/REG; they do not enter or remove statistical data.
+- App data-capacity handling: after 80 retained input records, `DATA FULL` appears. Press `AC`, then choose `1` to cancel or `2` to continue registering while disabling individual-record browsing/editing; statistical calculations remain available. The app caps the live data table at 10,000 input records (including the first 80). Changing mode or regression type clears the data set.
 
 ## Haptics
 
@@ -77,4 +78,4 @@ Run the calculation and key-behavior checks from the repository root:
 node tests/calculator.test.js
 ```
 
-The tests cover arithmetic, scientific keys and modifiers, angle/display setup, fractions, DMS, memory/Alpha variables, SD statistics, all six regression types, replay, Ran# and haptics.
+The tests cover arithmetic and parser limits, manual range/domain checks, scientific keys and modifiers, angle/display setup, fractions, DMS, persistence, memory/Alpha variables, SD statistics and data-full handling, all six regression types, replay/history limits, auto-power-off, Ran# and haptics.
