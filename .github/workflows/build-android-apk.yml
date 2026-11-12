@@ -2,10 +2,12 @@ name: Build Android APK
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -35,6 +37,10 @@ jobs:
       - name: Build APK
         run: gradle --no-daemon --stacktrace assembleDebug
 
+      - name: Prepare release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/fx82ms-debug.apk
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -42,3 +48,15 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish tagged GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: fx82ms Calculator ${{ github.ref_name }}
+          body: |
+            Android APK for the fx82ms scientific calculator.
+
+            Install the APK on Android to use the offline WebView app. This is a debug-signed sideload build.
+          files: app/build/outputs/apk/debug/fx82ms-debug.apk
+          fail_on_unmatched_files: true

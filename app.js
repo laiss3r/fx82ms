@@ -39,13 +39,21 @@
     angle: 'DEG',
     mode: 'COMP',
     regType: 'Lin',
+    modeSetupPage: 0,
     ans: 0,
     vars: Object.fromEntries(variableNames.map((key) => [key, 0])),
     memory: 0,
+    memorySet: false,
     pending: null,
     fractionView: 0,
+    fractionFormat: 'mixed',
+    displayFormat: 'Norm',
+    displayDigits: 10,
+    normSetting: 1,
+    decimalSymbol: '.',
     dmsDisplay: null,
     engineeringView: false,
+    engineeringShift: 0,
     stats: [],
     regression: null,
     lastRegression: null
@@ -91,6 +99,49 @@
     return String(Number(value.toPrecision(significant)));
   }
 
+  function formatDisplayNumber(value) {
+    if (!Number.isFinite(value)) return 'Math ERROR';
+    value = cleanZero(value);
+    if (value === 0) return state.displayFormat === 'Fix' ? `0.${'0'.repeat(state.displayDigits)}` : '0';
+
+    let text;
+    if (state.displayFormat === 'Fix') {
+      text = value.toFixed(state.displayDigits);
+    } else if (state.displayFormat === 'Sci') {
+      text = value.toExponential(Math.max(0, state.displayDigits - 1));
+    } else {
+      const abs = Math.abs(value);
+      const lowerLimit = state.normSetting === 1 ? 1e-2 : 1e-9;
+      text = abs >= 1e10 || abs < lowerLimit
+        ? value.toExponential(9)
+        : String(Number(value.toPrecision(10)));
+    }
+
+    text = text.replace(/e([+-]?)0+(\d+)/i, 'e$1$2').replace(/e\+/, 'e');
+    if (state.displayFormat === 'Norm') {
+      text = text.replace(/\.0+e/i, 'e').replace(/(\.\d*?[1-9])0+e/i, '$1e');
+    }
+    const match = text.match(/^([+-]?)(\d+)(?:\.(\d+))?(e.*)?$/i);
+    if (match) {
+      const [, sign, integer, decimals, exponent = ''] = match;
+      const groupSymbol = state.decimalSymbol === ',' ? '.' : ',';
+      const decimalSymbol = state.decimalSymbol;
+      const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, groupSymbol);
+      text = `${sign}${grouped}${decimals ? `${decimalSymbol}${decimals}` : ''}${exponent}`;
+    }
+    return text;
+  }
+
+  function roundToDisplayPrecision(value) {
+    if (!Number.isFinite(value)) return value;
+    if (state.displayFormat === 'Fix') {
+      const factor = 10 ** state.displayDigits;
+      return Math.sign(value) * Math.round(Math.abs(value) * factor) / factor;
+    }
+    const digits = state.displayFormat === 'Sci' ? state.displayDigits : 10;
+    return Number(value.toPrecision(digits));
+  }
+
   function scalar(value) {
     if (value && typeof value === 'object' && value.__percent === true) return value.value;
     if (Array.isArray(value)) return scalar(value[0]);
@@ -126,7 +177,7 @@
 
   function formatFraction(value, mixed) {
     const ratio = rationalApproximation(value);
-    if (!ratio) return formatNumber(value);
+    if (!ratio) return formatDisplayNumber(value);
     const negative = ratio.n < 0;
     const absN = Math.abs(ratio.n);
     const d = ratio.d;
@@ -142,24 +193,36 @@
   }
 
   function formatEngineering(value) {
-    if (!Number.isFinite(value) || value === 0) return formatNumber(value);
-    const exponent = Math.floor(Math.log10(Math.abs(value)) / 3) * 3;
-    if (exponent === 0) return formatNumber(value);
+    if (!Number.isFinite(value) || value === 0) return formatDisplayNumber(value);
+    const exponent = Math.floor(Math.log10(Math.abs(value)) / 3) * 3 + state.engineeringShift * 3;
+    if (exponent === 0) return formatDisplayNumber(value);
     const mantissa = value / (10 ** exponent);
-    return `${formatNumber(mantissa)}×10^${exponent}`;
+    return `${formatDisplayNumber(mantissa)}×10^${exponent}`;
   }
 
   function formatDMS(value) {
     if (!Number.isFinite(value)) return 'Math ERROR';
     const negative = value < 0 ? '−' : '';
-    let absolute = Math.abs(value);
-    const degrees = Math.floor(absolute);
-    absolute = (absolute - degrees) * 60;
-    const minutes = Math.floor(absolute);
-    const seconds = Math.round((absolute - minutes) * 60 * 100) / 100;
-    let secText = formatNumber(seconds, 5);
-    if (seconds < 10) secText = `0${secText}`;
+    let totalSeconds = Math.round(Math.abs(value) * 360000) / 100;
+    let degrees = Math.floor(totalSeconds / 3600);
+    totalSeconds -= degrees * 3600;
+    let minutes = Math.floor(totalSeconds / 60);
+    let seconds = Math.round((totalSeconds - minutes * 60) * 100) / 100;
+    if (seconds >= 60) { seconds = 0; minutes += 1; }
+    if (minutes >= 60) { minutes = 0; degrees += 1; }
+    const secText = seconds.toFixed(2).padStart(5, '0');
     return `${negative}${degrees}° ${minutes}′ ${secText}″`;
+  }
+
+  function isFractionCalculationExpression(expression) {
+    if (expression.includes('┘')) return true;
+    let depth = 0;
+    for (const character of expression) {
+      if (character === '(') depth += 1;
+      else if (character === ')') depth = Math.max(0, depth - 1);
+      else if (character === '÷' && depth === 0) return true;
+    }
+    return false;
   }
 
   function formatResult(value) {
@@ -167,16 +230,19 @@
     if (state.error) return state.error;
     if (state.prompt) return state.prompt.result;
     if (Array.isArray(value)) {
-      const first = formatNumber(scalar(value[0]));
-      const second = formatNumber(scalar(value[1]));
+      const first = formatDisplayNumber(scalar(value[0]));
+      const second = formatDisplayNumber(scalar(value[1]));
       return `${first}; ${second}`;
     }
     const n = scalar(value ?? 0);
     if (!Number.isFinite(n)) return 'Math ERROR';
-    if (state.fractionView === 1) return formatFraction(n, false);
-    if (state.fractionView === 2) return formatFraction(n, true);
+    if (state.fractionView === 1) return formatDisplayNumber(n);
+    if (state.fractionView === 2) return formatFraction(n, false);
+    if (state.fractionView === 3) return formatFraction(n, true);
+    const fractionResult = state.justEvaluated && isFractionCalculationExpression(state.expr);
+    if (fractionResult && !Number.isInteger(n)) return formatFraction(n, state.fractionFormat === 'mixed');
     if (state.engineeringView) return formatEngineering(n);
-    return formatNumber(n);
+    return formatDisplayNumber(n);
   }
 
   function expressionWithCursor() {
@@ -188,15 +254,17 @@
 
   function render() {
     statusMode.textContent = state.mode === 'REG' ? `REG ${state.regType}` : state.mode;
-    statusAngle.textContent = state.angle === 'DEG' ? 'D' : state.angle === 'RAD' ? 'R' : 'G';
+    statusAngle.textContent = state.angle;
     const flags = [];
     if (state.shift) flags.push('SHIFT');
     if (state.alpha) flags.push('ALPHA');
     if (state.hyp) flags.push('HYP');
+    if (state.displayFormat === 'Fix') flags.push('FIX');
+    if (state.displayFormat === 'Sci') flags.push('SCI');
     if (state.insertMode) flags.push('INS');
     if (state.message) flags.push(state.message);
     statusFlags.textContent = flags.join(' ');
-    statusMemory.textContent = state.memory !== 0 ? 'M' : '';
+    statusMemory.textContent = state.memorySet ? 'M' : '';
     expressionText.textContent = state.prompt ? state.prompt.expression : expressionWithCursor();
     resultText.textContent = state.prompt ? state.prompt.result : formatResult(state.resultValue);
     resultText.classList.toggle('prompt-result', Boolean(state.prompt));
@@ -379,17 +447,100 @@
     state.fractionView = 0;
     state.dmsDisplay = null;
     state.engineeringView = false;
+    state.engineeringShift = 0;
     state.replayIndex = -1;
     state.draft = null;
     render();
   }
 
+  function showModeSetupPage(page) {
+    const pages = [
+      ['MODE', '1 COMP  2 SD  3 REG'],
+      ['ANGLE', '1 DEG  2 RAD  3 GRA'],
+      ['FORMAT', '1 FIX  2 SCI  3 NORM'],
+      ['FRACTION', '1 ab/c  2 d/c'],
+      ['DISP', '1 DOT  2 COMMA']
+    ];
+    state.modeSetupPage = page % pages.length;
+    const [expression, result] = pages[state.modeSetupPage];
+    state.pending = { type: 'setup', page: state.modeSetupPage };
+    state.prompt = { expression, result };
+    state.message = '';
+    render();
+  }
+
   function openModeMenu() {
-    setPrompt('mode', 'MODE', '1 COMP   2 SD   3 REG');
+    if (state.pending && typeof state.pending === 'object' && state.pending.type === 'setup') {
+      showModeSetupPage((state.pending.page + 1) % 5);
+    } else {
+      showModeSetupPage(0);
+    }
   }
 
   function openClearMenu() {
-    setPrompt('clear', 'CLR', '1 Mcl   2 Mode   3 All');
+    setPrompt('clear', 'CLR', '1 Mcl  2 Mode  3 All');
+  }
+
+  function commitSetupMessage(message) {
+    state.modeSetupPage = 0;
+    clearPrompt();
+    showMessage(message, 1100);
+  }
+
+  function selectModeSetup(page, number) {
+    if (page === 0) { state.modeSetupPage = 0; selectMode(number); return; }
+    if (page === 1) {
+      const angle = { '1': 'DEG', '2': 'RAD', '3': 'GRA' }[number];
+      if (!angle) return;
+      state.angle = angle;
+      state.dmsDisplay = null;
+      commitSetupMessage(angle);
+      return;
+    }
+    if (page === 2) {
+      if (number === '1' || number === '2') {
+        const format = number === '1' ? 'Fix' : 'Sci';
+        state.displayFormat = format;
+        state.pending = { type: 'precision', format, buffer: '' };
+        state.prompt = { expression: format.toUpperCase(), result: format === 'Fix' ? '0-9 DECIMALS' : '1-10 DIGITS' };
+        render();
+      } else if (number === '3') {
+        state.displayFormat = 'Norm';
+        state.displayDigits = 10;
+        state.pending = { type: 'norm' };
+        state.prompt = { expression: 'NORM', result: '1 NORM 1  2 NORM 2' };
+        render();
+      }
+      return;
+    }
+    if (page === 3) {
+      if (number !== '1' && number !== '2') return;
+      state.fractionFormat = number === '1' ? 'mixed' : 'improper';
+      state.fractionView = 0;
+      commitSetupMessage(number === '1' ? 'MIXED FRACTION' : 'IMPROPER FRACTION');
+      return;
+    }
+    if (page === 4) {
+      if (number !== '1' && number !== '2') return;
+      state.decimalSymbol = number === '1' ? '.' : ',';
+      commitSetupMessage(number === '1' ? 'DOT' : 'COMMA');
+    }
+  }
+
+  function commitPrecision() {
+    const pending = state.pending;
+    if (!pending || pending.type !== 'precision' || !pending.buffer) return false;
+    const digits = Number(pending.buffer);
+    const valid = pending.format === 'Fix' ? digits >= 0 && digits <= 9 : digits >= 1 && digits <= 10;
+    if (!valid) {
+      clearPrompt();
+      state.error = 'Math ERROR';
+      render();
+      return true;
+    }
+    state.displayDigits = digits;
+    commitSetupMessage(`${pending.format.toUpperCase()} ${digits}`);
+    return true;
   }
 
   function selectMode(number) {
@@ -433,8 +584,7 @@
     if (number === '1') {
       state.vars = Object.fromEntries(variableNames.map((key) => [key, 0]));
       state.memory = 0;
-      state.stats = [];
-      state.lastRegression = null;
+      state.memorySet = false;
       clearAll();
       showMessage('MEMORY CLEARED', 1000);
       return;
@@ -444,6 +594,15 @@
       state.angle = 'DEG';
       state.regType = 'Lin';
       state.hyp = false;
+      state.displayFormat = 'Norm';
+      state.displayDigits = 10;
+      state.normSetting = 1;
+      state.fractionFormat = 'mixed';
+      state.fractionView = 0;
+      state.decimalSymbol = '.';
+      state.modeSetupPage = 0;
+      state.stats = [];
+      state.lastRegression = null;
       clearAll();
       showMessage('MODE RESET', 1000);
       return;
@@ -452,9 +611,18 @@
       state.mode = 'COMP';
       state.angle = 'DEG';
       state.regType = 'Lin';
+      state.hyp = false;
+      state.displayFormat = 'Norm';
+      state.displayDigits = 10;
+      state.normSetting = 1;
+      state.fractionFormat = 'mixed';
+      state.fractionView = 0;
+      state.decimalSymbol = '.';
+      state.modeSetupPage = 0;
       state.ans = 0;
       state.vars = Object.fromEntries(variableNames.map((key) => [key, 0]));
       state.memory = 0;
+      state.memorySet = false;
       state.stats = [];
       state.lastRegression = null;
       state.history = [];
@@ -480,7 +648,7 @@
     if (action === 'store') {
       const value = currentValue();
       state.vars[letter] = value;
-      if (letter === 'M') state.memory = value;
+      if (letter === 'M') { state.memory = value; state.memorySet = true; }
       state.resultValue = value;
       showMessage(`${letter} STORED`, 1200);
     } else {
@@ -510,14 +678,11 @@
   }
 
   function addMemory(subtract = false) {
-    if (state.mode !== 'COMP') {
-      addStatDatum(subtract);
-      return;
-    }
     try {
       const value = currentValue();
       state.memory = cleanZero(state.memory + (subtract ? -value : value));
       state.vars.M = state.memory;
+      state.memorySet = true;
       showMessage(subtract ? 'M−' : 'M+', 900);
     } catch (error) {
       state.error = error.message || 'Math ERROR';
@@ -555,20 +720,27 @@
   function addStatDatum(remove = false) {
     if (remove) { deleteLastStat(); render(); return; }
     try {
-      const source = autoclose(state.expr);
+      const hasInput = Boolean(state.expr.trim());
+      const source = hasInput ? autoclose(state.expr) : '';
       let datum;
       if (state.mode === 'REG') {
-        const pair = splitStatPair(source);
-        if (!pair) throw new CalcError('Enter x,y');
-        const x = scalar(evaluateExpression(pair[0]));
-        const y = scalar(evaluateExpression(pair[1]));
-        if (!Number.isFinite(x) || !Number.isFinite(y)) throw new CalcError();
-        datum = { x, y };
+        if (!hasInput && state.stats.length) {
+          datum = { ...state.stats[state.stats.length - 1] };
+        } else {
+          const pair = splitStatPair(source);
+          if (!pair) throw new CalcError('Enter x,y');
+          const x = scalar(evaluateExpression(pair[0]));
+          const y = scalar(evaluateExpression(pair[1]));
+          if (!Number.isFinite(x) || !Number.isFinite(y)) throw new CalcError();
+          datum = { x, y };
+        }
       } else {
-        const x = source.trim() ? scalar(evaluateExpression(source)) : scalar(state.resultValue ?? 0);
+        const x = hasInput ? scalar(evaluateExpression(source))
+          : state.stats.length ? state.stats[state.stats.length - 1].x : scalar(state.resultValue ?? 0);
         if (!Number.isFinite(x)) throw new CalcError();
         datum = { x };
       }
+      if (state.stats.length >= 80) throw new CalcError('Data Full');
       state.stats.push(datum);
       state.expr = '';
       state.cursor = 0;
@@ -602,8 +774,13 @@
       const meanY = sumY / n;
       const varianceY = ys.reduce((acc, y) => acc + (y - meanY) ** 2, 0) / n;
       const sampleY = n > 1 ? ys.reduce((acc, y) => acc + (y - meanY) ** 2, 0) / (n - 1) : 0;
-      const fit = regressionFit(state.stats, state.regType);
-      Object.assign(output, { sumY, sumY2, sumXY, meanY, sigmaY: Math.sqrt(varianceY), sampleY: Math.sqrt(sampleY), ...fit });
+      Object.assign(output, { sumY, sumY2, sumXY, meanY, sigmaY: Math.sqrt(varianceY), sampleY: Math.sqrt(sampleY) });
+      if (state.regType === 'Quad') {
+        output.sumX3 = xs.reduce((acc, x) => acc + x ** 3, 0);
+        output.sumX2Y = state.stats.reduce((acc, row) => acc + row.x ** 2 * row.y, 0);
+        output.sumX4 = xs.reduce((acc, x) => acc + x ** 4, 0);
+      }
+
     }
     return output;
   }
@@ -684,30 +861,122 @@
       return;
     }
     if (which === 'sum') {
-      const choices = state.mode === 'REG' ? '1 Σx²  2 Σx  3 Σy²  4 Σy  5 Σxy' : '1 Σx²   2 Σx';
+      const choices = state.mode === 'REG'
+        ? state.regType === 'Quad' ? '1 Σx² 2 Σx 3 n 4 Σy² 5 Σy 6 Σxy 0 More' : '1 Σx² 2 Σx 3 n 4 Σy² 5 Σy 6 Σxy'
+        : '1 Σx² 2 Σx 3 n';
       setPrompt('statSum', 'S-SUM', choices);
     } else {
       const choices = state.mode === 'REG'
-        ? '1 n  2 x̄  3 σx  4 sx  5 ȳ  6 σy  7 sy  8 a  9 b  0 r'
-        : '1 n  2 x̄  3 σx  4 sx';
+        ? '1 x̄ 2 σx 3 sx 4 ȳ 5 σy 6 sy 7 A 8 B 0 More'
+        : '1 x̄ 2 σx 3 sx';
       setPrompt('statVar', 'S-VAR', choices);
     }
   }
 
+  function openStatisticsMore(which) {
+    if (which === 'sum') {
+      setPrompt('statSumMore', 'S-SUM+', state.regType === 'Quad'
+        ? '1 Σx³ 2 Σx²y 3 Σx⁴'
+        : 'No additional sums');
+      return;
+    }
+    const choices = state.regType === 'Quad'
+      ? '1 C 2 ŷ 3 x̂1 4 x̂2'
+      : '1 r 2 x̂ 3 ŷ';
+    setPrompt('statVarMore', 'S-VAR+', choices);
+  }
+
+  function regressionEstimate(type, fit, input, estimateX) {
+    const { a, b, c } = fit;
+    if (![a, b].every(Number.isFinite)) throw new CalcError('NO DATA');
+    if (type === 'Quad') {
+      if (estimateX) return a + b * input + c * input * input;
+      if (Math.abs(c) < 1e-14) {
+        if (Math.abs(b) < 1e-14) throw new CalcError();
+        return [(input - a) / b, NaN];
+      }
+      const discriminant = b * b - 4 * c * (a - input);
+      if (discriminant < 0) throw new CalcError();
+      const root = Math.sqrt(discriminant);
+      return [(-b + root) / (2 * c), (-b - root) / (2 * c)];
+    }
+    if (estimateX) {
+      if (type === 'Log') {
+        if (input <= 0) throw new CalcError();
+        return a + b * Math.log(input);
+      }
+      if (type === 'Exp') return a * Math.exp(b * input);
+      if (type === 'Pwr') {
+        if (input <= 0) throw new CalcError();
+        return a * input ** b;
+      }
+      if (type === 'Inv') {
+        if (input === 0) throw new CalcError();
+        return a + b / input;
+      }
+      return a + b * input;
+    }
+    if (Math.abs(b) < 1e-14) throw new CalcError();
+    if (type === 'Log') return Math.exp((input - a) / b);
+    if (type === 'Exp') {
+      if (input / a <= 0) throw new CalcError();
+      return Math.log(input / a) / b;
+    }
+    if (type === 'Pwr') {
+      if (input / a <= 0) throw new CalcError();
+      return (input / a) ** (1 / b);
+    }
+    if (type === 'Inv') {
+      if (input === a) throw new CalcError();
+      return b / (input - a);
+    }
+    return (input - a) / b;
+  }
+
   function selectStatistic(which, choice) {
+    if (which === 'sum' && choice === '0') { openStatisticsMore('sum'); return; }
+    if (which === 'var' && choice === '0') { openStatisticsMore('var'); return; }
     try {
       const values = statisticsValues();
+      if (state.mode === 'REG' && (which === 'varMore' || (which === 'var' && ['7', '8'].includes(choice)))) {
+        Object.assign(values, regressionFit(state.stats, state.regType));
+      }
       let value;
       if (which === 'sum') {
         value = state.mode === 'REG'
-          ? ({ '1': values.sumSq, '2': values.sum, '3': values.sumY2, '4': values.sumY, '5': values.sumXY })[choice]
-          : ({ '1': values.sumSq, '2': values.sum })[choice];
-      } else if (state.mode === 'REG') {
-        value = ({ '1': values.n, '2': values.mean, '3': values.sigmaX, '4': values.sampleX, '5': values.meanY, '6': values.sigmaY, '7': values.sampleY, '8': values.a, '9': values.b, '0': values.r })[choice];
-      } else {
-        value = ({ '1': values.n, '2': values.mean, '3': values.sigmaX, '4': values.sampleX })[choice];
+          ? ({ '1': values.sumSq, '2': values.sum, '3': values.n, '4': values.sumY2, '5': values.sumY, '6': values.sumXY })[choice]
+          : ({ '1': values.sumSq, '2': values.sum, '3': values.n })[choice];
+      } else if (which === 'sumMore') {
+        value = ({ '1': values.sumX3, '2': values.sumX2Y, '3': values.sumX4 })[choice];
+      } else if (which === 'var') {
+        value = state.mode === 'REG'
+          ? ({ '1': values.mean, '2': values.sigmaX, '3': values.sampleX,
+            '4': values.meanY, '5': values.sigmaY, '6': values.sampleY, '7': values.a, '8': values.b })[choice]
+          : ({ '1': values.mean, '2': values.sigmaX, '3': values.sampleX })[choice];
+      } else if (which === 'varMore') {
+        if (state.regType === 'Quad') {
+          if (choice === '1') value = values.c;
+          else if (choice === '2') {
+            const input = scalar(currentValue());
+            value = regressionEstimate(state.regType, values, input, true);
+          } else if (choice === '3') {
+            const input = scalar(currentValue());
+            value = regressionEstimate(state.regType, values, input, false)[0];
+          } else if (choice === '4') {
+            const input = scalar(currentValue());
+            value = regressionEstimate(state.regType, values, input, false)[1];
+          }
+        } else if (choice === '1') {
+          value = values.r;
+        } else if (choice === '2') {
+          const input = scalar(currentValue());
+          value = regressionEstimate(state.regType, values, input, false);
+        } else if (choice === '3') {
+          const input = scalar(currentValue());
+          value = regressionEstimate(state.regType, values, input, true);
+        }
       }
-      if (value === undefined) { clearPrompt(); render(); return; }
+      if (value === undefined || !Number.isFinite(value)) throw new CalcError('NO DATA');
       clearPrompt();
       state.resultValue = value;
       state.ans = value;
@@ -736,12 +1005,30 @@
 
   function preprocessExpression(expression) {
     let source = expression.replace(/[−–]/g, '-').replace(/×/g, '*').replace(/÷/g, '/');
-    // The fx-82MS fraction key uses a two-part separator; three parts are a mixed number.
-    source = source.replace(/(\d+(?:\.\d+)?)┘(\d+(?:\.\d+)?)┘(\d+(?:\.\d+)?)/g, '($1+$2/$3)');
+    if (state.fractionFormat === 'improper' && /-?\d+(?:\.\d+)?┘\d+(?:\.\d+)?┘\d/.test(source)) {
+      throw new CalcError('Math ERROR');
+    }
+    // The fraction key separates numerator/denominator; a second separator adds a whole-number part.
+    source = source.replace(/(-?\d+(?:\.\d+)?)┘(\d+(?:\.\d+)?)┘(\d+(?:\.\d+)?)/g, (match, whole, numerator, denominator) => {
+      const negative = whole.startsWith('-');
+      const absoluteWhole = negative ? whole.slice(1) : whole;
+      return negative ? `-(${absoluteWhole}+${numerator}/${denominator})` : `(${whole}+${numerator}/${denominator})`;
+    });
     source = source.replace(/┘/g, '/');
-    // Convert a degrees-minutes-seconds entry such as 30°30°30 into decimal degrees.
-    source = source.replace(/(\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)(?:°)?/g, '($1+$2/60+$3/3600)');
-    source = source.replace(/(\d+(?:\.\d+)?|\.\d+)°/g, '$1');
+    // The DMS key cycles through degree, minute and second marks during entry.
+    source = source.replace(/(-?\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)′(\d+(?:\.\d+)?)″?/g, (match, degrees, minutes, seconds) => {
+      const negative = degrees.startsWith('-');
+      const absoluteDegrees = negative ? degrees.slice(1) : degrees;
+      const value = `${absoluteDegrees}+${minutes}/60+${seconds}/3600`;
+      return negative ? `-(${value})` : `(${value})`;
+    });
+    source = source.replace(/(-?\d+(?:\.\d+)?)°(\d+(?:\.\d+)?)′/g, (match, degrees, minutes) => {
+      const negative = degrees.startsWith('-');
+      const absoluteDegrees = negative ? degrees.slice(1) : degrees;
+      const value = `${absoluteDegrees}+${minutes}/60`;
+      return negative ? `-(${value})` : `(${value})`;
+    });
+    source = source.replace(/(-?\d+(?:\.\d+)?|\.\d+)°/g, '$1');
     return source;
   }
 
@@ -774,13 +1061,12 @@
         tokens.push({ type: 'operator', value: lower });
       } else if (lower === 'pi') {
         tokens.push({ type: 'constant', value: Math.PI });
-      } else if (lower === 'e') {
+      } else if (raw === 'e') {
         tokens.push({ type: 'constant', value: Math.E });
       } else if (lower === 'ans') {
         tokens.push({ type: 'constant', value: state.ans });
-      } else if (variableNames.includes(raw.toUpperCase()) && raw.length === 1) {
-        const variable = raw.toUpperCase();
-        tokens.push({ type: 'constant', value: variable === 'M' ? state.memory : state.vars[variable] ?? 0 });
+      } else if (variableNames.includes(raw) && raw.length === 1) {
+        tokens.push({ type: 'constant', value: raw === 'M' ? state.memory : state.vars[raw] ?? 0 });
       } else if (['sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'asinh', 'acosh', 'atanh', 'log', 'ln', 'sqrt', 'cbrt', 'exp', 'abs', 'floor', 'ceil', 'rnd', 'rand', 'pol', 'rec'].includes(lower)) {
         tokens.push({ type: 'function', value: lower });
       } else {
@@ -830,8 +1116,8 @@
   function polar(x, y) {
     const radius = Math.hypot(x, y);
     const theta = radiansToAngle(Math.atan2(y, x));
-    state.vars.X = radius;
-    state.vars.Y = theta;
+    state.vars.E = radius;
+    state.vars.F = theta;
     return [radius, theta];
   }
 
@@ -839,8 +1125,8 @@
     const radians = angleToRadians(theta);
     const x = radius * Math.cos(radians);
     const y = radius * Math.sin(radians);
-    state.vars.X = x;
-    state.vars.Y = y;
+    state.vars.E = x;
+    state.vars.F = y;
     return [x, y];
   }
 
@@ -858,8 +1144,8 @@
       case 'abs': return Math.abs(a);
       case 'floor': return Math.floor(a);
       case 'ceil': return Math.ceil(a);
-      case 'rnd': return Number(a.toPrecision(10));
-      case 'rand': return Math.random();
+      case 'rnd': return roundToDisplayPrecision(a);
+      case 'rand': return Math.floor(Math.random() * 1000) / 1000;
       case 'pol': return polar(scalar(args[0]), scalar(args[1]));
       case 'rec': return rectangular(scalar(args[0]), scalar(args[1]));
       default: throw new CalcError('Syntax ERROR');
@@ -1016,6 +1302,7 @@
       state.dmsDisplay = null;
       state.fractionView = 0;
       state.engineeringView = false;
+      state.engineeringShift = 0;
       if (addHistory) {
         state.history.push({ expr: completed, value: Array.isArray(value) ? [...value] : value });
         if (state.history.length > 100) state.history.shift();
@@ -1067,18 +1354,41 @@
     render();
   }
 
-  function cycleAngle() {
-    state.angle = state.angle === 'DEG' ? 'RAD' : state.angle === 'RAD' ? 'GRA' : 'DEG';
+  function openAngleConversion() {
+    setPrompt('angleConvert', 'DRG▶', '1 DEG  2 RAD  3 GRA');
+  }
+
+  function convertDisplayedAngle(number) {
+    const target = { '1': 'DEG', '2': 'RAD', '3': 'GRA' }[number];
+    if (!target) return;
+    const value = scalar(currentValue());
+    const radians = angleToRadians(value);
+    const converted = target === 'DEG' ? radians * 180 / Math.PI
+      : target === 'GRA' ? radians * 200 / Math.PI : radians;
+    clearPrompt();
+    state.resultValue = cleanZero(converted);
+    state.ans = state.resultValue;
+    state.expr = '';
+    state.cursor = 0;
+    state.justEvaluated = true;
+    state.error = '';
     state.dmsDisplay = null;
-    showMessage(state.angle, 900);
+    state.fractionView = 0;
+    showMessage(`CONVERTED TO ${target}`, 1000);
   }
 
   function applyEngineering() {
     if (state.expr.trim() && !state.justEvaluated) {
       calculate({ addHistory: false });
-      if (!state.error) state.engineeringView = true;
+      if (!state.error) {
+        state.engineeringView = true;
+        state.engineeringShift = 0;
+      }
+    } else if (state.engineeringView) {
+      state.engineeringShift += 1;
     } else {
-      state.engineeringView = !state.engineeringView;
+      state.engineeringView = true;
+      state.engineeringShift = 0;
     }
     render();
   }
@@ -1091,16 +1401,96 @@
       calculate();
       return;
     }
-    state.resultValue = Number(scalar(state.resultValue ?? state.ans).toPrecision(10));
+    state.resultValue = roundToDisplayPrecision(scalar(state.resultValue ?? state.ans));
     state.ans = scalar(state.resultValue);
     state.justEvaluated = true;
     state.error = '';
     render();
   }
 
+  function toggleFractionDisplay(shifted = false) {
+    if (!shifted && state.expr.trim() && !state.justEvaluated) {
+      insertRaw('┘', 'operand');
+      return;
+    }
+    state.dmsDisplay = null;
+    state.engineeringView = false;
+    if (shifted) {
+      const currentlyMixed = state.fractionView === 3 ? true
+        : state.fractionView === 2 ? false : state.fractionFormat === 'mixed';
+      state.fractionFormat = currentlyMixed ? 'improper' : 'mixed';
+      state.fractionView = currentlyMixed ? 2 : 3;
+      showMessage(currentlyMixed ? 'IMPROPER FRACTION' : 'MIXED FRACTION', 1000);
+      return;
+    }
+    if (state.fractionView === 1) {
+      state.fractionView = 0;
+    } else if (state.fractionView === 2 || state.fractionView === 3) {
+      state.fractionView = 1;
+    } else {
+      const value = scalar(state.resultValue ?? state.ans ?? 0);
+      const ratio = rationalApproximation(value);
+      const defaultFraction = /[÷/┘]/.test(state.expr) && ratio && ratio.d !== 1;
+      state.fractionView = defaultFraction ? 1 : (state.fractionFormat === 'mixed' ? 3 : 2);
+    }
+    render();
+  }
+
+  function insertDmsMark() {
+    if (state.justEvaluated) {
+      state.dmsDisplay = formatDMS(scalar(state.resultValue));
+      render();
+      return;
+    }
+    const before = state.expr.slice(0, state.cursor);
+    const currentTerm = before.split(/[+−×÷^(),]/).pop();
+    const previousMark = (currentTerm.match(/[°′″]/g) || []).slice(-1)[0];
+    if (previousMark === '″') return;
+    const mark = previousMark === '°' ? '′' : previousMark === '′' ? '″' : '°';
+    insertRaw(mark, 'operand');
+  }
+
   function handlePending(key) {
     const pending = state.pending;
     if (!pending) return false;
+    if (typeof pending === 'object' && pending.type === 'setup') {
+      if (key === 'mode') { showModeSetupPage((pending.page + 1) % 5); return true; }
+      if (/^[0-9]$/.test(key)) { selectModeSetup(pending.page, key); return true; }
+      if (key === 'shift' || key === 'alpha') return false;
+      cancelPrompt();
+      state.modeSetupPage = 0;
+      return false;
+    }
+    if (typeof pending === 'object' && pending.type === 'precision') {
+      if (key === 'equals') { commitPrecision(); return true; }
+      if (/^[0-9]$/.test(key)) {
+        pending.buffer += key;
+        state.prompt.result = pending.format === 'Fix' ? `${pending.buffer} DECIMALS` : `${pending.buffer} DIGITS; = TO SET`;
+        render();
+        if (pending.format === 'Fix' || pending.buffer.length >= 2) commitPrecision();
+        return true;
+      }
+      if (key === 'shift' || key === 'alpha') return false;
+      if (pending.buffer) commitPrecision();
+      else cancelPrompt();
+      return false;
+    }
+    if (typeof pending === 'object' && pending.type === 'norm') {
+      if (key === '1' || key === '2') {
+        state.normSetting = Number(key);
+        commitSetupMessage(`NORM ${key}`);
+        return true;
+      }
+      if (key === 'shift' || key === 'alpha') return false;
+      cancelPrompt();
+      return false;
+    }
+    if (pending === 'angleConvert') {
+      if (['1', '2', '3'].includes(key)) { convertDisplayedAngle(key); return true; }
+      if (key === 'shift' || key === 'alpha') return false;
+      cancelPrompt();
+      return false;
+    }
     if (pending === 'mode') {
       if (['1', '2', '3'].includes(key)) { selectMode(key); return true; }
       if (key === 'mode') { cancelPrompt(); return true; }
@@ -1109,6 +1499,10 @@
       return false;
     }
     if (pending === 'regtype') {
+      if (state.shift && ['1', '2', '3'].includes(key)) {
+        selectRegression({ '1': '4', '2': '5', '3': '6' }[key]);
+        return true;
+      }
       if (['1', '2', '3', '4', '5', '6'].includes(key)) { selectRegression(key); return true; }
       if (key === 'shift' || key === 'alpha') return false;
       cancelPrompt();
@@ -1120,8 +1514,14 @@
       cancelPrompt();
       return false;
     }
-    if (pending === 'statSum' || pending === 'statVar') {
-      if (/^[0-9]$/.test(key)) { selectStatistic(pending === 'statSum' ? 'sum' : 'var', key); return true; }
+    if (pending === 'statSum' || pending === 'statVar' || pending === 'statSumMore' || pending === 'statVarMore') {
+      if (/^[0-9]$/.test(key)) {
+        const which = pending === 'statSum' ? 'sum'
+          : pending === 'statVar' ? 'var'
+            : pending === 'statSumMore' ? 'sumMore' : 'varMore';
+        selectStatistic(which, key);
+        return true;
+      }
       if (key === 'shift' || key === 'alpha') return false;
       cancelPrompt();
       return false;
@@ -1154,11 +1554,7 @@
       case 'ncr': appendOperator(' nPr '); break;
       case 'polar': insertFunction('Rec'); break;
       case 'cube': insertFunction('cbrt'); break;
-      case 'fraction':
-        state.fractionView = (state.fractionView + 1) % 3;
-        state.dmsDisplay = null;
-        showMessage(state.fractionView === 0 ? 'DECIMAL' : state.fractionView === 1 ? 'IMPROPER FRACTION' : 'MIXED FRACTION', 1000);
-        break;
+      case 'fraction': toggleFractionDisplay(true); break;
       case 'power': appendOperator(' root '); break;
       case 'log': insertRaw('10^(', 'operand'); break;
       case 'ln': insertRaw('e^(', 'operand'); break;
@@ -1174,9 +1570,9 @@
       case '1': openStatisticsMenu('sum'); break;
       case '2': openStatisticsMenu('var'); break;
       case '3': insertRaw('π', 'operand'); break;
-      case 'exp': insertFunction('rand'); break;
+      case 'exp': insertRaw('rand', 'operand'); break;
       case '0': applyRnd(); break;
-      case 'ans': cycleAngle(); break;
+      case 'ans': openAngleConversion(); break;
       case 'equals': startPostfix('%'); break;
       default: break;
     }
@@ -1189,19 +1585,14 @@
       case 'ncr': appendOperator(' nCr '); break;
       case 'polar': insertFunction('Pol'); break;
       case 'cube': startPostfix('^3'); break;
-      case 'fraction': insertRaw('┘', 'operand'); break;
+      case 'fraction': toggleFractionDisplay(false); break;
       case 'sqrt': insertFunction('sqrt'); break;
       case 'square': startPostfix('^2'); break;
       case 'power': appendOperator('^'); break;
       case 'log': insertFunction('log'); break;
       case 'ln': insertFunction('ln'); break;
       case 'negative': toggleSign(); break;
-      case 'dms':
-        if (state.justEvaluated) {
-          state.dmsDisplay = formatDMS(scalar(state.resultValue));
-          render();
-        } else insertRaw('°', 'operand');
-        break;
+      case 'dms': insertDmsMark(); break;
       case 'hyp': state.hyp = !state.hyp; showMessage(state.hyp ? 'HYP' : 'HYP OFF', 900); break;
       case 'sin': insertFunction(state.hyp ? 'sinh' : 'sin'); state.hyp = false; break;
       case 'cos': insertFunction(state.hyp ? 'cosh' : 'cos'); state.hyp = false; break;
@@ -1221,7 +1612,10 @@
       case 'decimal': insertDecimal(); break;
       case 'exp': insertRaw('×10^', 'operator'); break;
       case 'ans': insertRaw('Ans', 'operand'); break;
-      case 'equals': calculate(); break;
+      case 'equals':
+        if (state.mode === 'COMP') calculate();
+        else addStatDatum();
+        break;
       case 'mode': openModeMenu(); break;
       case 'on':
         state.on = true;
@@ -1286,8 +1680,21 @@
     render();
   }
 
+  function vibrateOnTap() {
+    try {
+      if (window.AndroidHaptics && typeof window.AndroidHaptics.tap === 'function') {
+        window.AndroidHaptics.tap();
+      } else if (navigator.vibrate) {
+        navigator.vibrate(8);
+      }
+    } catch (_) { /* Haptics are optional on devices without a vibrator. */ }
+  }
+
   document.querySelectorAll('[data-key]').forEach((button) => {
-    button.addEventListener('click', () => handleKey(button.dataset.key));
+    button.addEventListener('click', () => {
+      vibrateOnTap();
+      handleKey(button.dataset.key);
+    });
   });
 
   const keyboardMap = {
@@ -1307,6 +1714,7 @@
     }
     if (mapped) {
       event.preventDefault();
+      vibrateOnTap();
       handleKey(mapped);
     }
   });

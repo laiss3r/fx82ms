@@ -1,39 +1,41 @@
-# fx-82MS style calculator
+# fx-82MS calculator for Android and the web
 
-A responsive, touch-first scientific calculator inspired by the Casio fx-82MS 2nd edition layout. It works in a mobile browser and can be installed to an Android home screen as a lightweight PWA. Once loaded, the calculator shell and code are cached for offline use.
+A mobile-first, offline-ready scientific calculator based on the Casio fx-82MS 2nd-edition key layout and workflow. It runs as a PWA or inside the bundled Android WebView app. This is an independent educational implementation, not an official Casio product or a bit-for-bit firmware emulator.
 
-## Run it
+## Download the Android APK
 
-Serve this folder from a local web server (PWA installation and offline caching require HTTPS or `localhost`):
+Use the public [GitHub Releases page](https://github.com/laiss3r/fx82ms/releases/latest) and download `fx82ms-debug.apk`. The APK is debug-signed for sideloading/testing, not for Play Store distribution. Android may ask you to allow installation from the app you use to open the APK.
+
+The repository is public at [github.com/laiss3r/fx82ms](https://github.com/laiss3r/fx82ms). GitHub Actions builds the APK on every push to `main`, and the workflow can also be run manually from the Actions tab.
+
+## Key behavior and supported calculations
+
+The key-by-key main/SHIFT/ALPHA reference is in [`docs/key-reference.md`](docs/key-reference.md). It maps the displayed keys and alternate functions, including the modifier keys, the MODE setup pages, and the SD/REG statistics menus.
+
+The implementation includes COMP, SD and REG modes; six regression types; angle-unit setup and DRG▶ conversion; display precision; fraction and DMS entry/conversion; arithmetic, percentages, powers, roots, trig/hyperbolic/log functions, nCr/nPr, factorial, random, Rnd, engineering notation, Pol/Rec; Ans, A–F/X/Y variables, independent M memory, editing and replay. Every tap has a subtle 8 ms vibration when supported (native Android bridge in the APK, browser vibration API fallback in the PWA).
+
+## Run the PWA locally
+
+Serve the repository root (PWA install/offline support requires HTTPS or `localhost`):
 
 ```sh
 python3 -m http.server 4173 --bind 0.0.0.0
 ```
 
-Open `http://localhost:4173` on a computer, or open the hosted HTTPS URL on Android.
+Open `http://localhost:4173` on a computer, or open the hosted HTTPS URL on Android and choose **Install app** / **Add to Home screen**. After the first load, the app shell and calculator code are cached for offline use.
 
-## Install on Android
+## Tests
 
-1. Open the hosted HTTPS page in Chrome.
-2. Tap **Install app** if it appears, or use Chrome's menu → **Add to Home screen** / **Install app**.
-3. The app opens in a standalone portrait window and keeps its calculator assets available offline after the first visit.
+Run the calculation and key-behavior regression suite from the project root:
 
-## Build a downloadable Android APK with GitHub Actions
+```sh
+node tests/calculator.test.js
+```
 
-The Android project is in the root of this folder. The workflow at `.github/workflows/build-android-apk.yml` builds an installable **debug APK** on every push and can also be started manually.
+## Android build workflow
 
-1. Install GitHub CLI and authenticate privately with `gh auth login` (it opens a browser flow; no token needs to go into this project).
-2. From this folder, run `./publish-to-github.sh fx82ms`. It initializes Git, creates the public `fx82ms` repository, pushes the project, waits for the APK workflow, and downloads the APK only if the build succeeds. If you prefer, create/push the public repository manually and use **Actions → Build Android APK → Run workflow**.
-3. The script saves `app-debug.apk` in a timestamped `apk-download-*` folder. Install it on Android (Android may ask you to allow installs from the files app).
+The workflow is `.github/workflows/build-android-apk.yml`. It uses Java 17, Gradle and Android SDK setup, builds `assembleDebug`, and uploads the APK as the `fx82ms-debug-apk` Actions artifact. Tagged releases attach the APK to a public GitHub Release.
 
-The APK bundles the calculator locally in a small Android WebView, so the calculator itself does not need a network connection. This is a debug-signed APK for sideloading/testing, not a Play Store release build.
+## Reference
 
-## Included controls
-
-- Arithmetic, parentheses, replay history, cursor editing, reciprocal, factorial, powers, roots, fractions, percentages, scientific notation, logs, trigonometry, inverse/hyperbolic functions, DMS, polar/rectangular conversion, random, angle units, variables and independent memory.
-- COMP, SD and REG modes; SD summaries and linear/log/exp/power/inverse/quadratic regression data entry.
-- Touch controls and hardware keyboard shortcuts (Enter, digits, operators, arrows, Shift, Alt).
-
-Reference: [Casio fx-82MS / fx-85MS / fx-300MS / fx-350MS User's Guide (2nd edition)](https://www.casio.com/content/dam/casio/global/support/manuals/calculators/pdf/004-en/f/fx-82MS_85MS_220PLUS_300MS_350MS_EN.pdf).
-
-This is an independent educational implementation of the fx-82MS-style workflow; it is not an official Casio application and is not a bit-for-bit firmware emulator.
+The key markings and function behavior are based on the [Casio fx-82MS / fx-85MS / fx-220 PLUS / fx-300MS / fx-350MS 2nd-edition online manual](https://support.casio.com/global/en/calc/manual/fx-82MS_85MS_220PLUS_300MS_350MS_en/) and [official PDF](https://www.casio.com/content/dam/casio/global/support/manuals/calculators/pdf/004-en/f/fx-82MS_85MS_220PLUS_300MS_350MS_EN.pdf).

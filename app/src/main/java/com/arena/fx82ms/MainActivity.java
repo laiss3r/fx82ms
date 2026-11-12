@@ -1,10 +1,14 @@
 package com.arena.fx82ms;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -12,6 +16,20 @@ import android.webkit.WebViewClient;
 
 public final class MainActivity extends Activity {
     private WebView calculatorView;
+
+    private final class HapticsBridge {
+        private final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+        @JavascriptInterface
+        public void tap() {
+            if (vibrator == null || !vibrator.hasVibrator()) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(8, 64));
+            } else {
+                vibrator.vibrate(8);
+            }
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -40,6 +58,7 @@ public final class MainActivity extends Activity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         }
 
+        calculatorView.addJavascriptInterface(new HapticsBridge(), "AndroidHaptics");
         calculatorView.setWebViewClient(new WebViewClient());
         calculatorView.setWebChromeClient(new WebChromeClient());
         setContentView(calculatorView);

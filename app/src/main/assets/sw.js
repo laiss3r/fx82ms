@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fx82ms-calculator-v1';
+const CACHE_NAME = 'fx82ms-calculator-v1.0.1';
 const ASSETS = [
   './',
   './index.html',
