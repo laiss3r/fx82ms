@@ -486,11 +486,14 @@ test('DMS arithmetic and decimal↔sexagesimal conversion follow the manual exam
   app.press('dms'); assert.equal(app.result(), '2.258');
 });
 
-test('PWA, Android asset mirror and host are configured for a fixed fullscreen interface', () => {
+test('PWA assets are synced and the Android host is configured in Kotlin', () => {
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   const manifest = fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
-  const activity = fs.readFileSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/MainActivity.java'), 'utf8');
+  const activity = fs.readFileSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/MainActivity.kt'), 'utf8');
+  const kotlinBuild = fs.readFileSync(path.join(root, 'build.gradle'), 'utf8');
+  assert.match(kotlinBuild, /org\.jetbrains\.kotlin\.android/);
+  assert.equal(fs.existsSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/MainActivity.java')), false);
   for (const asset of ['app.js', 'index.html', 'styles.css', 'manifest.webmanifest', 'sw.js']) {
     assert.equal(fs.readFileSync(path.join(root, asset), 'utf8'), fs.readFileSync(path.join(root, 'app/src/main/assets', asset), 'utf8'), `${asset} Android mirror is out of sync`);
   }
