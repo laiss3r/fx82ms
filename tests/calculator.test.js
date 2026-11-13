@@ -486,24 +486,27 @@ test('DMS arithmetic and decimal↔sexagesimal conversion follow the manual exam
   app.press('dms'); assert.equal(app.result(), '2.258');
 });
 
-test('PWA assets are synced and the Android host is configured in Kotlin', () => {
+test('Android app is fully native Kotlin while the browser PWA remains separate', () => {
   const css = fs.readFileSync(path.join(root, 'styles.css'), 'utf8');
   const manifest = fs.readFileSync(path.join(root, 'manifest.webmanifest'), 'utf8');
   const sw = fs.readFileSync(path.join(root, 'sw.js'), 'utf8');
   const activity = fs.readFileSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/MainActivity.kt'), 'utf8');
+  const engine = fs.readFileSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/CalculatorEngine.kt'), 'utf8');
   const kotlinBuild = fs.readFileSync(path.join(root, 'build.gradle'), 'utf8');
   assert.match(kotlinBuild, /org\.jetbrains\.kotlin\.android/);
   assert.equal(fs.existsSync(path.join(root, 'app/src/main/java/com/arena/fx82ms/MainActivity.java')), false);
-  for (const asset of ['app.js', 'index.html', 'styles.css', 'manifest.webmanifest', 'sw.js']) {
-    assert.equal(fs.readFileSync(path.join(root, asset), 'utf8'), fs.readFileSync(path.join(root, 'app/src/main/assets', asset), 'utf8'), `${asset} Android mirror is out of sync`);
-  }
+  assert.equal(fs.existsSync(path.join(root, 'app/src/main/assets')), false);
+  assert.match(activity, /CalculatorEngine/);
+  assert.match(activity, /createFunctionGrid/);
+  assert.doesNotMatch(activity, /WebView|JavascriptInterface|loadUrl/);
+  assert.doesNotMatch(engine, /android\.webkit|JavascriptInterface|WebView/);
   assert.match(sw, /fx82ms-calculator-v1\.1\.0/);
   assert.match(html, /user-scalable=no/);
   assert.match(css, /html, body\s*\{[^}]*overflow:\s*hidden/s);
   assert.match(css, /\.app-shell\s*\{[^}]*overflow:\s*hidden/s);
   assert.match(manifest, /"display":\s*"fullscreen"/);
   assert.match(manifest, /"orientation":\s*"portrait"/);
-  assert.match(activity, /HAPTIC_MILLIS\s*=\s*8/);
+  assert.match(activity, /createOneShot\(8L/);
   assert.match(activity, /WindowInsetsController\.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE/);
 });
 

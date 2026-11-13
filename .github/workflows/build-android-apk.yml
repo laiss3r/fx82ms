@@ -34,6 +34,9 @@ jobs:
       - name: Install Android build components
         run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Test native Kotlin calculator engine
+        run: gradle --no-daemon testDebugUnitTest
+
       - name: Build APK
         run: gradle --no-daemon --stacktrace assembleDebug
 
@@ -57,6 +60,6 @@ jobs:
           body: |
             Android APK for the fx82ms scientific calculator.
 
-            Install the APK on Android to use the offline WebView app. This is a debug-signed sideload build.
+            Install the APK on Android to use the fully native Kotlin calculator offline. This is a debug-signed sideload build.
           files: app/build/outputs/apk/debug/fx82ms-debug.apk
           fail_on_unmatched_files: true

@@ -68,14 +68,15 @@ Setup screens accept the displayed number. `Fix` asks for 0–9 decimal places; 
 
 ## Haptics
 
-Every on-screen key tap triggers a subtle 8 ms vibration when the device supports it. The Android APK uses a small native WebView bridge and the browser/PWA uses `navigator.vibrate` as a fallback.
+Every on-screen key tap triggers a subtle 8 ms vibration when the device supports it. The native Kotlin Android app uses Android's `Vibrator` API; the separate browser/PWA uses `navigator.vibrate`.
 
 ## Automated coverage
 
-Run the calculation and key-behavior checks from the repository root:
+Run the browser/PWA regression checks and the native Kotlin engine unit tests from the repository root:
 
 ```sh
 node tests/calculator.test.js
+gradle :app:testDebugUnitTest
 ```
 
-The tests cover arithmetic and parser limits, manual range/domain checks, scientific keys and modifiers, angle/display setup, fractions, DMS, persistence, memory/Alpha variables, SD statistics and data-full handling, all six regression types, replay/history limits, auto-power-off, Ran# and haptics.
+The Node suite covers the separate PWA. The Kotlin tests exercise the Android engine's arithmetic, scientific keys, angle modes, fractions, DMS, memory, SD statistics, regression families, persistence, errors and power state.
